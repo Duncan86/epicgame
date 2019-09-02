@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>tetris</title>
+    </head>
+    <script>
+    alert('Mobile/Tablet: Click on the edge of grid to move and on centre to rotate the block\nPC: Use arrow keys or w, a, s & d')
+            function byId(id) {
+              return document.getElementById(id)
+            }
+            
+            const grid = Array(15).fill().map(() => Array(12).fill(0))
+            
+            class Tetrimino {
+              constructor(shape) {
+                this.shape = shape
+                this.x = 0
+                this.y = 0
+              }
+            
+              move(dir) {
+                this.x += dir
+                if (this.collide()) {
+                  this.x -= dir
+                }
+              }
+            
+              rotate(dir) {
+                const length = this.shape.length
+                for (let i = 0; i < length; i++) {
+                  for (let j = 0; j < i; j++) {
+                    [this.shape[j][i], this.shape[i][j]] = [this.shape[i][j], this.shape[j][i]]
+                  }
+                }
+                if (dir) this.shape.forEach(row => row.reverse())
+                else this.shape.reverse()
+              }
+            
+              collide() {
+                const length = this.shape.length
+                for (let i = 0; i < length; i++) {
+                  for (let j = 0; j < length; j++) {
+                    if (this.shape[i][j] !== 0 && (grid[i + this.y] && grid[i + this.y][j + this.x]) !== 0) {
+                      return true
+                    }
+                  }
+                }
+                return false
+              }
+            
+              fix() {
+                this.shape.forEach((row, j) => {
+                  row.forEach((value, i) => {
+                    if (value !== 0) {
+                      grid[j + this.y][i + this.x] = value
+                    }
+                  })
+                })
+              }
+            
+              static random() {
+                return Tetrimino.shapes[Math.random() * 7 | 0]
+              }
+            }
+            
+            Tetrimino.shapes = [
+              [
+                [0, 1, 0, 0],
+                [0, 1, 0, 0],
+                [0, 1, 0, 0],
+                [0, 1, 0, 0]
+              ],
+              [
+                [0, 2, 0],
+                [0, 2, 0],
+                [0, 2, 2]
+              ],
+              [
+                [0, 3, 0],
+                [0, 3, 0],
+                [3, 3, 0]
+              ],
+              [
+                [4, 4],
+                [4, 4]
+              ],
+              [
+                [5, 5, 0],
+                [0, 5, 5],
+                [0, 0, 0]
+              ],
+              [
+                [0, 6, 6],
+                [6, 6, 0],
+                [0, 0, 0]
+              ],
+              [
+                [0, 7, 0],
+                [7, 7, 7],
+                [0, 0, 0]
+              ]
+            ]
+            Tetrimino.colors = [
+              '#16161d', '#ff0d72', '#0dc2ff', '#0dff72', '#f538ff', '#ff8e08', '#ffe138', '#3877ff'
+            ]
+            
+            class Game {
+              constructor(canvas, nextC, rows, score, level) {
+                this.canvas = canvas
+                this.canvas.height = 450
+                this.canvas.width = 360
+            
+                this.nextC = nextC
+                this.nextC.height = 28
+                this.nextC.width = 28
+            
+                this.context = this.canvas.getContext('2d')
+                this.nextCtx = this.nextC.getContext('2d')
+            
+                this.addEvent()
+            
+                this.rows = {
+                  value: 0,
+                  dom: rows
+                }
+                this.score = {
+                  value: 0,
+                  dom: score
+                }
+                this.level = {
+                  value: 1,
+                  dom: level
+                }
+              }
+            
+              addEvent() {
+                this.canvas.addEventListener('click', e => {
+                  if (e.offsetY <= 390) {
+                    if (e.offsetX <= 66) this.currentTetrimino.move(-1)
+                    else if (e.offsetX >= 294) this.currentTetrimino.move(1)
+                    else this.performRotate(1)
+                  } else this.performDrop()
+                })
+              }
+            
+              updateInfo() {
+                this.rows.dom.innerText = this.rows.value
+                this.score.value = this.rows.value * 200
+                this.score.dom.innerText = this.score.value
+                this.level.value = this.rows.value / 10 | 0
+                this.level.dom.innerText = this.level.value
+              }
+            
+              paint(grid, offset, zero = false, context = this.context, size = 29, pad = 1) {
+                grid.forEach((row, y) => {
+                  row.forEach((value, x) => {
+                    if (value !== 0 || zero) {
+                      context.strokeStyle = '#000'
+                      context.fillStyle = Tetrimino.colors[value]
+                      context.beginPath()
+                      if (size === 29) {
+                        context.lineWidth = pad
+                      }
+                      const s = context === this.context ? 6 : 0
+                      context.rect((x + offset.x) * size + s, (y + offset.y) * size + s, size - pad, size - pad)
+                      if (size === 29) {
+                        context.stroke()
+                      }
+                      context.fill()
+                    }
+                  })
+                })
+              }
+            
+              draw() {
+                this.context.fillStyle = '#16161d'
+                this.context.fillRect(0, 0, 360, 450)
+            
+                this.paint(grid, {
+                  x: 0,
+                  y: 0
+                }, true)
+                this.paint(this.currentTetrimino.shape, {
+                  x: this.currentTetrimino.x,
+                  y: this.currentTetrimino.y
+                })
+              }
+            
+              randomize() {
+                this.currentTetrimino = new Tetrimino(this.nextTetrimino.shape)
+                this.nextTetrimino = new Tetrimino(Tetrimino.random())
+                if (this.currentTetrimino.collide()) {
+                  this.over()
+                }
+            
+                this.nextCtx.clearRect(0, 0, 28, 28)
+                this.paint(this.nextTetrimino.shape, {
+                  x: 0,
+                  y: 0
+                }, false, this.nextCtx, 7, 1)
+              }
+            
+              start() {
+                this.gameOver = false
+                this.rows.value = 0
+                this.score.value = 0
+                this.level.value = 0
+                this.dropCount = 0
+                this.initialTime = 0
+            
+                this.currentTetrimino = new Tetrimino(Tetrimino.random())
+                this.nextTetrimino = new Tetrimino(Tetrimino.random())
+            
+                this.updateInfo()
+                this.randomize()
+                this.update()
+              }
+            
+              performRotate(dir) {
+                let t = 1
+                let x = this.x
+                this.currentTetrimino.rotate(dir)
+                while (this.currentTetrimino.collide()) {
+                  this.x += t
+                  t = -(t + (t > 0 ? 1 : -1))
+                  if (t > this.currentTetrimino.shape[0].length) {
+                    this.currentTetrimino.rotate(-1)
+                    this.x = x
+                  }
+                }
+              }
+            
+              performDrop() {
+                this.currentTetrimino.y++
+                if (this.currentTetrimino.collide()) {
+                  this.currentTetrimino.y--
+                  this.currentTetrimino.fix()
+                  this.clear()
+                  this.randomize()
+                }
+                this.dropCount = 0
+              }
+            
+              clear() {
+                const length = grid.length
+                for (let i = length - 1; i > 0; i--) {
+                  if (!grid[i].some(v => v === 0)) {
+                    grid.unshift(grid.splice(i, 1)[0].fill(0))
+                    i++
+                    this.rows.value++
+                    this.updateInfo()
+                  }
+                }
+              }
+            
+              empty() {
+                grid.map(row => row.fill(0))
+              }
+            
+              over() {
+                this.gameOver = true
+                byId('game').classList.add('over')
+                this.empty()
+              }
+            
+              update(time = 0) {
+                let delta = time - this.initialTime
+                this.dropCount += delta
+                if (this.dropCount > 1000) {
+                  this.performDrop()
+                }
+                this.initialTime = time
+            
+                this.draw()
+                if (!this.gameOver) requestAnimationFrame(this.update.bind(this))
+              }
+            
+              restart() {
+                if (this.gameOver) {
+                  this.start()
+                }
+              }
+            }
+            
+            window.onload = function () {
+              const Tetris = new Game(...[
+                'gameCanvas', 'nextCanvas', 'rows', 'score', 'level'
+              ].map(id => byId(id)))
+            
+              byId('start').addEventListener('click', (e) => {
+                byId('game').style.display = 'grid'
+                e.target.style.display = 'none'
+                Tetris.start()
+              })
+            
+              byId('restart').addEventListener('click', () => {
+                byId('game').classList.remove('over')
+                Tetris.restart()
+              })
+            
+              window.addEventListener('keydown', e => {
+                switch (e.key) {
+                  case 'w':
+                  case 'ArrowUp':
+                    Tetris.performRotate(1);
+                    break;
+                  case 'a':
+                  case 'ArrowLeft':
+                    Tetris.currentTetrimino.move(-1);
+                    break;
+                  case 's':
+                  case 'ArrowDown':
+                    Tetris.performDrop()
+                    break;
+                  case 'd':
+                  case 'ArrowRight':
+                    Tetris.currentTetrimino.move(1);
+                    break;
+                  default:
+                    break;
+                }
+              })
+            }
+    </script>
+    <style>
+        body {
+  all: unset;
+  display: grid;
+  place-content: center;
+  height: 100vh;
+  user-select: none;
+  font-family: 'Montserrat', sans-serif;
+  color: #ddd;
+  font-weight: 500;
+  font-size: 14px
+}
+
+#game {
+  height: 512px;
+  width: 360px;
+  display: none;
+  grid-template-rows: 450px 62px;
+}
+
+.game,
+.panel {
+  position: relative;
+}
+
+.game {
+  background: #0f0a0e;
+}
+
+.panel {
+  background: #0a0a0a;
+  display: flex;
+  flex-shrink: 0; 
+}
+
+.over>.panel {
+  align-items: center;
+  justify-content: center;
+}
+
+.over>.panel .next {
+  display: none;
+}
+
+.over>.panel div {
+  height: 60px
+}
+
+#game.over {
+  grid-template-rows: auto;
+}
+
+.over>.game {
+  display: none
+}
+
+.panel>div {
+  width: 90px;
+}
+
+.panel>div {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+
+#restart, #start {
+  all: unset;
+  border: 1px solid #000000;
+  display: none;
+  cursor: pointer;
+  padding: 7px 15px;
+  background-color: #22a;
+}
+
+#start {
+  display: block; 
+}
+
+.msg {
+  display: none;
+}
+
+.over #restart {
+  display: block;
+  position: absolute;
+  margin-top: 50px;
+}
+
+.over .msg {
+  display: block;
+  position: absolute;
+  font-size: 24px;
+  margin-top: -100px;
+}
+
+#score,
+#level,
+#rows {
+  height: 28px;
+  line-height: 32px;
+}
+    </style>
+    <body>
+            <button id="start">Start</button>
+            <div id="game">
+              <div class="game">
+                <canvas id="gameCanvas"></canvas>
+              </div>
+              <div class="panel">
+                <div class="next">
+                  <span>next</span>
+                  <canvas id='nextCanvas'></canvas>
+                </div>
+                <div><span>rows</span>
+                  <div id="rows">0</div>
+                </div>
+                <div><span>score</span>
+                  <div id="score">0</div>
+                </div>
+                <div><span>level</span>
+                  <div id="level">0</div>
+                </div>
+                <button id="restart">RESTART</button>
+                <span class="msg">GAME OVER!</span>
+              </div>
+            </div>
+          </body>          
+</html>
